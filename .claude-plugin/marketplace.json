@@ -1,0 +1,21 @@
+{
+  "name": "pages-cli",
+  "owner": {
+    "name": "Marcel R. G. Berger"
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Apple Pages CLI — Control Apple Pages from Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "pages-cli",
+      "source": "./",
+      "description": "Control Apple Pages from Claude — create, edit, format & export documents via /pages slash command. 100+ templates, PDF/Word/EPUB export, tables, images, REPL mode.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Marcel R. G. Berger"
+      }
+    }
+  ]
+}
