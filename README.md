@@ -25,7 +25,8 @@ Claude Code plugin for full control over **Apple Pages**. Create, edit, format, 
 ### Via Claude Code
 
 ```bash
-claude plugins add marcelrgberger/pages-cli
+claude plugins marketplace add marcelrgberger/pages-cli
+claude plugins install pages-cli
 ```
 
 The CLI backend is installed automatically on first use of `/pages`.
