@@ -1,6 +1,13 @@
-"""Export module for Apple Pages."""
+"""Export module for Apple Pages.
+
+Full coverage of all export formats and options including:
+- PDF with password, password hint, image quality, comments, annotations
+- EPUB with title, author, genre, language, publisher, cover, fixed layout
+- Microsoft Word, plain text, RTF, Pages 09
+"""
 
 from pages_cli.utils.pages_backend import _run_applescript, ensure_pages_running
+from pages_cli.utils.helpers import _doc_target, _esc
 
 
 # Maps user-friendly format names to Pages AppleScript export format constants
@@ -21,53 +28,49 @@ _FORMAT_MAP = {
     "pages09": "Pages 09",
 }
 
-
-def _doc_target(document: str | None) -> str:
-    """Return the AppleScript target reference for a document."""
-    if document:
-        escaped = document.replace('"', '\\"')
-        return f'document "{escaped}"'
-    return "front document"
+# Valid image quality values
+IMAGE_QUALITIES = ["Good", "Better", "Best"]
 
 
 def export_document(
     output_path: str,
     format: str = "PDF",
     document: str | None = None,
-    **options,
+    password: str | None = None,
+    password_hint: str | None = None,
+    image_quality: str | None = None,
+    include_comments: bool | None = None,
+    include_annotations: bool | None = None,
+    # EPUB-specific
+    epub_title: str | None = None,
+    epub_author: str | None = None,
+    epub_genre: str | None = None,
+    epub_language: str | None = None,
+    epub_publisher: str | None = None,
+    epub_cover: str | None = None,
+    epub_fixed_layout: bool | None = None,
 ) -> dict:
-    """Export the document to the specified format.
+    """Export the document to the specified format with full option support.
 
     Args:
         output_path: The output file path.
-        format: Export format. Supported values:
-            "PDF", "Microsoft Word" / "word" / "docx",
-            "EPUB" / "epub",
-            "unformatted text" / "text" / "txt",
-            "formatted text" / "rtf",
-            "Pages 09" / "pages09".
-        document: Optional document name.
-        **options: Additional export options:
-            - password (str): Password protect the export.
-            - password_hint (str): Password hint.
-            - image_quality (str): Image quality ("Good", "Better", "Best").
-            - include_comments (bool): Include comments in export.
-            - include_annotations (bool): Include annotations.
-            For EPUB exports:
-            - title (str): EPUB title.
-            - author (str): EPUB author.
-            - genre (str): EPUB genre.
-            - language (str): EPUB language.
-            - publisher (str): EPUB publisher.
-            - cover (str): Path to cover image.
-            - fixed_layout (bool): Use fixed layout for EPUB.
+        format: Export format name (see _FORMAT_MAP keys).
+        document: Optional target document name.
+        password: Password-protect the exported file.
+        password_hint: Hint for the password.
+        image_quality: "Good", "Better", or "Best".
+        include_comments: Include comments in export.
+        include_annotations: Include annotations in export.
+        epub_title: EPUB title metadata.
+        epub_author: EPUB author metadata.
+        epub_genre: EPUB genre metadata.
+        epub_language: EPUB language metadata.
+        epub_publisher: EPUB publisher metadata.
+        epub_cover: Path to cover image for EPUB.
+        epub_fixed_layout: Use fixed layout for EPUB.
 
     Returns:
-        dict: Export result with keys: path, format.
-
-    Raises:
-        RuntimeError: If the export fails.
-        ValueError: If an unsupported format is provided.
+        dict with keys: path, format.
     """
     ensure_pages_running()
     target = _doc_target(document)
@@ -76,56 +79,43 @@ def export_document(
     if resolved_format is None:
         raise ValueError(
             f"Unsupported export format '{format}'. "
-            f"Supported formats: {', '.join(get_export_formats())}"
+            f"Supported: {', '.join(get_export_formats())}"
         )
 
-    escaped_path = output_path.replace('"', '\\"')
+    escaped_path = _esc(output_path)
 
-    # Build the export properties
+    # Build export properties
     export_props = []
 
-    if options.get("password"):
-        pw = options["password"].replace('"', '\\"')
-        export_props.append(f'password:"{pw}"')
-
-    if options.get("password_hint"):
-        hint = options["password_hint"].replace('"', '\\"')
-        export_props.append(f'password hint:"{hint}"')
-
-    if options.get("image_quality"):
-        quality = options["image_quality"].replace('"', '\\"')
-        export_props.append(f'image quality:{quality}')
-
-    if options.get("include_comments") is not None:
-        val = "true" if options["include_comments"] else "false"
+    if password:
+        export_props.append(f'password:"{_esc(password)}"')
+    if password_hint:
+        export_props.append(f'password hint:"{_esc(password_hint)}"')
+    if image_quality:
+        export_props.append(f"image quality:{image_quality}")
+    if include_comments is not None:
+        val = "true" if include_comments else "false"
         export_props.append(f"include comments:{val}")
-
-    if options.get("include_annotations") is not None:
-        val = "true" if options["include_annotations"] else "false"
+    if include_annotations is not None:
+        val = "true" if include_annotations else "false"
         export_props.append(f"include annotations:{val}")
 
-    # EPUB-specific properties
+    # EPUB-specific
     if resolved_format == "EPUB":
-        if options.get("title"):
-            title = options["title"].replace('"', '\\"')
-            export_props.append(f'epub title:"{title}"')
-        if options.get("author"):
-            author = options["author"].replace('"', '\\"')
-            export_props.append(f'epub author:"{author}"')
-        if options.get("genre"):
-            genre = options["genre"].replace('"', '\\"')
-            export_props.append(f'epub genre:"{genre}"')
-        if options.get("language"):
-            lang = options["language"].replace('"', '\\"')
-            export_props.append(f'epub language:"{lang}"')
-        if options.get("publisher"):
-            pub = options["publisher"].replace('"', '\\"')
-            export_props.append(f'epub publisher:"{pub}"')
-        if options.get("cover"):
-            cover = options["cover"].replace('"', '\\"')
-            export_props.append(f'epub cover:POSIX file "{cover}"')
-        if options.get("fixed_layout") is not None:
-            val = "true" if options["fixed_layout"] else "false"
+        if epub_title:
+            export_props.append(f'epub title:"{_esc(epub_title)}"')
+        if epub_author:
+            export_props.append(f'epub author:"{_esc(epub_author)}"')
+        if epub_genre:
+            export_props.append(f'epub genre:"{_esc(epub_genre)}"')
+        if epub_language:
+            export_props.append(f'epub language:"{_esc(epub_language)}"')
+        if epub_publisher:
+            export_props.append(f'epub publisher:"{_esc(epub_publisher)}"')
+        if epub_cover:
+            export_props.append(f'epub cover:POSIX file "{_esc(epub_cover)}"')
+        if epub_fixed_layout is not None:
+            val = "true" if epub_fixed_layout else "false"
             export_props.append(f"fixed layout:{val}")
 
     # Build the export command
@@ -148,11 +138,7 @@ def export_document(
 
 
 def get_export_formats() -> list[str]:
-    """Return a list of supported export format names.
-
-    Returns:
-        list[str]: Supported export formats.
-    """
+    """Return a list of supported export format names."""
     return [
         "PDF",
         "Microsoft Word",
