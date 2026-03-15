@@ -1,0 +1,9 @@
+{
+  "name": "pages-cli",
+  "description": "Apple Pages CLI — Dokumente erstellen, bearbeiten, formatieren und exportieren direkt aus Claude heraus.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Marcel R. G. Berger",
+    "email": "hello@marcelrgberger.com"
+  }
+}
