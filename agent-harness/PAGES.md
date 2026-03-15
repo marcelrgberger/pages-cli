@@ -1,7 +1,7 @@
 # PAGES.md — Apple Pages CLI Harness SOP
 
 > Software-specific analysis, architecture decisions, command mapping, and
-> implementation notes for **cli-anything-pages**.
+> implementation notes for **pages-cli**.
 
 ---
 
@@ -215,7 +215,7 @@ Templates are enumerated via `tell application "Pages" to get name of every temp
 
 ### Backend Strategy: AppleScript-Only
 
-Unlike most cli-anything harnesses (which generate intermediate files and call a
+Unlike most pages-cli harnesses (which generate intermediate files and call a
 backend CLI for rendering), the Pages harness operates entirely through
 AppleScript. There is no intermediate file format to manipulate.
 
@@ -262,7 +262,7 @@ Both REPL and subcommand CLI, with REPL as default (per HARNESS.md convention).
 
 State is maintained by the running Pages application itself. The CLI tracks:
 - **Active document name** (the `--document` flag or REPL context)
-- **Session metadata** (JSON in `~/.cli-anything-pages/session.json`)
+- **Session metadata** (JSON in `~/.pages-cli/session.json`)
 - Pages' own document state is the source of truth (no shadow copies)
 
 ### Output Modes
@@ -630,10 +630,10 @@ pages/
 └── agent-harness/
     ├── PAGES.md               # This file
     ├── setup.py               # PyPI package configuration
-    └── cli_anything/          # Namespace package (NO __init__.py)
+    └── pages_cli/          # Namespace package (NO __init__.py)
         └── pages/             # Sub-package
             ├── __init__.py
-            ├── __main__.py    # python3 -m cli_anything.pages
+            ├── __main__.py    # python3 -m pages_cli.pages
             ├── README.md      # How to run
             ├── pages_cli.py   # Main CLI entry point (Click + REPL)
             ├── core/
@@ -806,7 +806,7 @@ Because Pages must be running for tests, the E2E test suite:
 **No graceful degradation:** If Pages is not installed, tests fail with a clear
 error message. Pages is a hard dependency.
 
-**Subprocess tests** use `_resolve_cli("cli-anything-pages")` per HARNESS.md
+**Subprocess tests** use `_resolve_cli("pages-cli")` per HARNESS.md
 convention. Full workflow tests create documents, add content, export, and
 verify output -- all via the installed CLI command.
 

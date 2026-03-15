@@ -1,4 +1,4 @@
-"""Unit tests for cli-anything-pages core modules.
+"""Unit tests for pages-cli core modules.
 
 These tests verify pure Python logic without requiring Apple Pages.
 External calls to osascript are mocked.
@@ -10,10 +10,10 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 # Test session module (pure Python, no mocking needed)
-from cli_anything.pages.core.session import Session
+from pages_cli.core.session import Session
 
 # Test export format mapping
-from cli_anything.pages.core.export import _FORMAT_MAP, get_export_formats
+from pages_cli.core.export import _FORMAT_MAP, get_export_formats
 
 
 class TestSession:
@@ -129,47 +129,47 @@ class TestExportFormatMapping:
 class TestBackend:
     """Test the pages_backend module with mocked subprocess calls."""
 
-    @patch("cli_anything.pages.utils.pages_backend.subprocess.run")
-    @patch("cli_anything.pages.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
+    @patch("pages_cli.utils.pages_backend.subprocess.run")
+    @patch("pages_cli.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
     def test_run_applescript_success(self, mock_which, mock_run):
-        from cli_anything.pages.utils.pages_backend import _run_applescript
+        from pages_cli.utils.pages_backend import _run_applescript
         mock_run.return_value = MagicMock(returncode=0, stdout="result\n", stderr="")
         result = _run_applescript('tell application "Pages" to get name of front document')
         assert result == "result"
         mock_run.assert_called_once()
 
-    @patch("cli_anything.pages.utils.pages_backend.subprocess.run")
-    @patch("cli_anything.pages.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
+    @patch("pages_cli.utils.pages_backend.subprocess.run")
+    @patch("pages_cli.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
     def test_run_applescript_failure(self, mock_which, mock_run):
-        from cli_anything.pages.utils.pages_backend import _run_applescript
+        from pages_cli.utils.pages_backend import _run_applescript
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error message")
         with pytest.raises(RuntimeError, match="error message"):
             _run_applescript("bad script")
 
-    @patch("cli_anything.pages.utils.pages_backend.shutil.which", return_value=None)
+    @patch("pages_cli.utils.pages_backend.shutil.which", return_value=None)
     def test_run_applescript_no_osascript(self, mock_which):
-        from cli_anything.pages.utils.pages_backend import _run_applescript
+        from pages_cli.utils.pages_backend import _run_applescript
         with pytest.raises(RuntimeError, match="osascript not found"):
             _run_applescript("any script")
 
-    @patch("cli_anything.pages.utils.pages_backend.subprocess.run")
-    @patch("cli_anything.pages.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
+    @patch("pages_cli.utils.pages_backend.subprocess.run")
+    @patch("pages_cli.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
     def test_run_applescript_timeout(self, mock_which, mock_run):
         import subprocess
-        from cli_anything.pages.utils.pages_backend import _run_applescript
+        from pages_cli.utils.pages_backend import _run_applescript
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="osascript", timeout=30)
         with pytest.raises(RuntimeError, match="timed out"):
             _run_applescript("slow script")
 
     def test_find_pages_app_exists(self):
-        from cli_anything.pages.utils.pages_backend import find_pages
+        from pages_cli.utils.pages_backend import find_pages
         # This test runs on macOS where Pages should be installed
         result = find_pages()
         assert "Pages" in result
 
-    @patch("cli_anything.pages.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
+    @patch("pages_cli.utils.pages_backend.shutil.which", return_value="/usr/bin/osascript")
     def test_is_pages_running_returns_bool(self, mock_which):
-        from cli_anything.pages.utils.pages_backend import is_pages_running
+        from pages_cli.utils.pages_backend import is_pages_running
         result = is_pages_running()
         assert isinstance(result, bool)
 
@@ -179,15 +179,15 @@ class TestCLI:
 
     def test_cli_help(self):
         from click.testing import CliRunner
-        from cli_anything.pages.pages_cli import cli
+        from pages_cli.pages_cli import cli
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
-        assert "cli-anything-pages" in result.output
+        assert "pages-cli" in result.output
 
     def test_cli_version(self):
         from click.testing import CliRunner
-        from cli_anything.pages.pages_cli import cli
+        from pages_cli.pages_cli import cli
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
@@ -195,7 +195,7 @@ class TestCLI:
 
     def test_document_group_help(self):
         from click.testing import CliRunner
-        from cli_anything.pages.pages_cli import cli
+        from pages_cli.pages_cli import cli
         runner = CliRunner()
         result = runner.invoke(cli, ["document", "--help"])
         assert result.exit_code == 0
@@ -204,7 +204,7 @@ class TestCLI:
 
     def test_export_formats_command(self):
         from click.testing import CliRunner
-        from cli_anything.pages.pages_cli import cli
+        from pages_cli.pages_cli import cli
         runner = CliRunner()
         result = runner.invoke(cli, ["--json", "export", "formats"])
         assert result.exit_code == 0
@@ -213,7 +213,7 @@ class TestCLI:
         assert len(data["formats"]) >= 5
 
     def test_all_command_groups_registered(self):
-        from cli_anything.pages.pages_cli import cli
+        from pages_cli.pages_cli import cli
         group_names = [cmd for cmd in cli.commands]
         assert "document" in group_names
         assert "text" in group_names

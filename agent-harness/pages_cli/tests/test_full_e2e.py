@@ -1,4 +1,4 @@
-"""End-to-end tests for cli-anything-pages.
+"""End-to-end tests for pages-cli.
 
 These tests require Apple Pages to be installed and running on macOS.
 They create real documents, manipulate them, and export to real files.
@@ -22,7 +22,7 @@ def _resolve_cli(name):
         return [path]
     if force:
         raise RuntimeError(f"{name} not found in PATH. Install with: pip install -e .")
-    module = name.replace("cli-anything-", "cli_anything.") + "." + name.split("-")[-1] + "_cli"
+    module = name.replace("pages-cli-", "pages_cli.") + "." + name.split("-")[-1] + "_cli"
     print(f"[_resolve_cli] Falling back to: {sys.executable} -m {module}")
     return [sys.executable, "-m", module]
 
@@ -56,14 +56,14 @@ class TestDocumentE2E:
     """E2E tests for document operations."""
 
     def test_create_blank_document(self, tmp_dir):
-        from cli_anything.pages.core.document import create_document, close_document
+        from pages_cli.core.document import create_document, close_document
         info = create_document(template="Blank")
         assert "name" in info
         assert info["page_count"] >= 1
         close_document(saving=False)
 
     def test_create_and_get_info(self, tmp_dir):
-        from cli_anything.pages.core.document import (
+        from pages_cli.core.document import (
             create_document, get_document_info, close_document
         )
         create_document(template="Blank")
@@ -74,7 +74,7 @@ class TestDocumentE2E:
         close_document(saving=False)
 
     def test_list_documents(self, tmp_dir):
-        from cli_anything.pages.core.document import (
+        from pages_cli.core.document import (
             create_document, list_documents, close_document
         )
         create_document(template="Blank")
@@ -88,17 +88,17 @@ class TestTextE2E:
     """E2E tests for text operations."""
 
     def test_add_and_get_text(self, tmp_dir):
-        from cli_anything.pages.core.document import create_document, close_document
-        from cli_anything.pages.core.text import add_text, get_body_text
+        from pages_cli.core.document import create_document, close_document
+        from pages_cli.core.text import add_text, get_body_text
         create_document(template="Blank")
-        add_text("Hello from cli-anything-pages!")
+        add_text("Hello from pages-cli!")
         body = get_body_text()
         assert "Hello" in body
         close_document(saving=False)
 
     def test_set_body_text(self, tmp_dir):
-        from cli_anything.pages.core.document import create_document, close_document
-        from cli_anything.pages.core.text import set_body_text, get_body_text
+        from pages_cli.core.document import create_document, close_document
+        from pages_cli.core.text import set_body_text, get_body_text
         create_document(template="Blank")
         set_body_text("Replaced content.")
         body = get_body_text()
@@ -106,8 +106,8 @@ class TestTextE2E:
         close_document(saving=False)
 
     def test_word_count(self, tmp_dir):
-        from cli_anything.pages.core.document import create_document, close_document
-        from cli_anything.pages.core.text import set_body_text, get_word_count
+        from pages_cli.core.document import create_document, close_document
+        from pages_cli.core.text import set_body_text, get_word_count
         create_document(template="Blank")
         set_body_text("one two three four five")
         count = get_word_count()
@@ -119,12 +119,12 @@ class TestExportE2E:
     """E2E tests for export operations — produces REAL output files."""
 
     def test_export_pdf(self, tmp_dir):
-        from cli_anything.pages.core.document import create_document, close_document
-        from cli_anything.pages.core.text import set_body_text
-        from cli_anything.pages.core.export import export_document
+        from pages_cli.core.document import create_document, close_document
+        from pages_cli.core.text import set_body_text
+        from pages_cli.core.export import export_document
 
         create_document(template="Blank")
-        set_body_text("PDF export test from cli-anything-pages.")
+        set_body_text("PDF export test from pages-cli.")
 
         pdf_path = os.path.join(tmp_dir, "test_output.pdf")
         result = export_document(pdf_path, format="PDF")
@@ -141,9 +141,9 @@ class TestExportE2E:
         close_document(saving=False)
 
     def test_export_word(self, tmp_dir):
-        from cli_anything.pages.core.document import create_document, close_document
-        from cli_anything.pages.core.text import set_body_text
-        from cli_anything.pages.core.export import export_document
+        from pages_cli.core.document import create_document, close_document
+        from pages_cli.core.text import set_body_text
+        from pages_cli.core.export import export_document
 
         create_document(template="Blank")
         set_body_text("Word export test.")
@@ -164,9 +164,9 @@ class TestExportE2E:
         close_document(saving=False)
 
     def test_export_plain_text(self, tmp_dir):
-        from cli_anything.pages.core.document import create_document, close_document
-        from cli_anything.pages.core.text import set_body_text
-        from cli_anything.pages.core.export import export_document
+        from pages_cli.core.document import create_document, close_document
+        from pages_cli.core.text import set_body_text
+        from pages_cli.core.export import export_document
 
         create_document(template="Blank")
         test_text = "Plain text export verification."
@@ -187,7 +187,7 @@ class TestTemplateE2E:
     """E2E tests for template operations."""
 
     def test_list_templates(self):
-        from cli_anything.pages.core.templates import list_templates
+        from pages_cli.core.templates import list_templates
         templates = list_templates()
         assert len(templates) > 50, f"Expected 50+ templates, got {len(templates)}"
         assert "Blank" in templates
@@ -196,7 +196,7 @@ class TestTemplateE2E:
 class TestCLISubprocess:
     """Subprocess tests — invokes the installed CLI command."""
 
-    CLI_BASE = _resolve_cli("cli-anything-pages")
+    CLI_BASE = _resolve_cli("pages-cli")
 
     def _run(self, args, check=True):
         return subprocess.run(
@@ -208,7 +208,7 @@ class TestCLISubprocess:
     def test_help(self):
         result = self._run(["--help"])
         assert result.returncode == 0
-        assert "cli-anything-pages" in result.stdout
+        assert "pages-cli" in result.stdout
 
     def test_version(self):
         result = self._run(["--version"])

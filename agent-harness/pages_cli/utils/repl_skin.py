@@ -1,10 +1,10 @@
-"""cli-anything REPL Skin — Unified terminal interface for all CLI harnesses.
+"""pages-cli REPL Skin — Unified terminal interface for all CLI harnesses.
 
 Copy this file into your CLI package at:
-    cli_anything/<software>/utils/repl_skin.py
+    pages_cli/<software>/utils/repl_skin.py
 
 Usage:
-    from cli_anything.<software>.utils.repl_skin import ReplSkin
+    from pages_cli.<software>.utils.repl_skin import ReplSkin
 
     skin = ReplSkin("shotcut", version="1.0.0")
     skin.print_banner()
@@ -30,7 +30,7 @@ _ITALIC = "\033[3m"
 _UNDERLINE = "\033[4m"
 
 # Brand colors
-_CYAN = "\033[38;5;80m"       # cli-anything brand cyan
+_CYAN = "\033[38;5;80m"       # pages-cli brand cyan
 _CYAN_BG = "\033[48;5;80m"
 _WHITE = "\033[97m"
 _GRAY = "\033[38;5;245m"
@@ -60,7 +60,7 @@ _MAGENTA = "\033[38;5;176m"
 
 # -- Brand icon -----------------------------------------------------------
 
-# The cli-anything icon: a small colored diamond/chevron mark
+# The pages-cli icon: a small colored diamond/chevron mark
 _ICON = f"{_CYAN}{_BOLD}\u25c6{_RESET}"
 _ICON_SMALL = f"{_CYAN}\u25b8{_RESET}"
 
@@ -91,10 +91,10 @@ def _visible_len(text: str) -> int:
 
 
 class ReplSkin:
-    """Unified REPL skin for cli-anything CLIs.
+    """Unified REPL skin for pages-cli CLIs.
 
     Provides consistent branding, prompts, and message formatting
-    across all CLI harnesses built with the cli-anything methodology.
+    across all CLI harnesses built with the pages-cli methodology.
     """
 
     def __init__(self, software: str, version: str = "1.0.0",
@@ -105,7 +105,7 @@ class ReplSkin:
             software: Software name (e.g., "gimp", "shotcut", "blender").
             version: CLI version string.
             history_file: Path for persistent command history.
-                         Defaults to ~/.cli-anything-<software>/history
+                         Defaults to ~/.pages-cli-<software>/history
         """
         self.software = software.lower().replace("-", "_")
         self.display_name = software.replace("_", " ").title()
@@ -115,7 +115,7 @@ class ReplSkin:
         # History file
         if history_file is None:
             from pathlib import Path
-            hist_dir = Path.home() / f".cli-anything-{self.software}"
+            hist_dir = Path.home() / f".pages-cli-{self.software}"
             hist_dir.mkdir(parents=True, exist_ok=True)
             self.history_file = str(hist_dir / "history")
         else:
@@ -155,9 +155,9 @@ class ReplSkin:
         top = self._c(_DARK_GRAY, f"{_TL}{_H_LINE * inner}{_TR}")
         bot = self._c(_DARK_GRAY, f"{_BL}{_H_LINE * inner}{_BR}")
 
-        # Title:  diamond  cli-anything . Shotcut
+        # Title:  diamond  pages-cli . Shotcut
         icon = self._c(_CYAN + _BOLD, "\u25c6")
-        brand = self._c(_CYAN + _BOLD, "cli-anything")
+        brand = self._c(_CYAN + _BOLD, "pages-cli")
         dot = self._c(_DARK_GRAY, "\u00b7")
         name = self._c(self.accent + _BOLD, self.display_name)
         title = f" {icon}  {brand} {dot} {name}"

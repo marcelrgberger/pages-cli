@@ -1,36 +1,36 @@
 # pages-cli
 
-Claude Code Plugin zur vollständigen Steuerung von **Apple Pages** direkt aus Claude heraus. Erstelle, bearbeite, formatiere und exportiere Pages-Dokumente per Slash-Command oder natürlicher Sprache.
+Claude Code plugin for full control over **Apple Pages**. Create, edit, format, and export Pages documents using slash commands or natural language.
 
 ## Features
 
-- Dokumente erstellen (aus 100+ Vorlagen inkl. eigener)
-- Text hinzufügen, formatieren, Schriftart/Farbe setzen
-- Tabellen einfügen, Zellen bearbeiten, sortieren, mergen
-- Bilder und Shapes einfügen
-- Export als PDF, Word, EPUB, Text, RTF
-- Interaktiver REPL-Modus
-- JSON-Output für Agent-Integration
-- Funktioniert mit natürlicher Sprache nach dem Öffnen
+- Create documents from 100+ templates (including custom ones)
+- Add and format text — font, size, color per paragraph
+- Insert and edit tables — cells, sorting, merging
+- Add images and shapes
+- Export to PDF, Word, EPUB, plain text, RTF
+- Interactive REPL mode
+- JSON output for agent integration
+- Natural language interaction after opening a document
 
-## Systemanforderungen
+## Requirements
 
-- **macOS** (Apple Pages ist macOS-only)
-- **Apple Pages** installiert (vorinstalliert oder [App Store](https://apps.apple.com/app/pages/id409201541))
+- **macOS** (Apple Pages is macOS-only)
+- **Apple Pages** installed (pre-installed or from the [App Store](https://apps.apple.com/app/pages/id409201541))
 - **Python 3.10+**
 - **Claude Code** CLI
 
 ## Installation
 
-### In Claude Code
+### Via Claude Code
 
 ```bash
 claude plugins add marcelrgberger/pages-cli
 ```
 
-Beim ersten Aufruf von `/pages` wird die CLI automatisch installiert.
+The CLI backend is installed automatically on first use of `/pages`.
 
-### Manuell
+### Manual
 
 ```bash
 git clone https://github.com/marcelrgberger/pages-cli.git
@@ -40,104 +40,112 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-## Verwendung
+## Usage
 
-### Slash-Commands
+### Slash Commands
 
 ```
-/pages                              Neues leeres Dokument
-/pages new                          Neues leeres Dokument
-/pages new Professional Report      Dokument aus Vorlage
-/pages open ~/Documents/brief.pages Dokument öffnen
-/pages info                         Dokumentinfo anzeigen
-/pages export pdf ~/Desktop/out.pdf Als PDF exportieren
-/pages export word ~/Desktop/out.docx Als Word exportieren
-/pages templates                    Vorlagen anzeigen
-/pages close                        Schließen
-/pages status                       Session-Status
+/pages                              Create a new blank document
+/pages new                          Create a new blank document
+/pages new Professional Report      Create from template
+/pages open ~/Documents/report.pages Open existing document
+/pages info                         Show document info
+/pages export pdf ~/Desktop/out.pdf Export as PDF
+/pages export word ~/Desktop/out.docx Export as Word
+/pages templates                    List available templates
+/pages close                        Close document
+/pages status                       Show session status
 ```
 
-### Natürliche Sprache
+### Natural Language
 
-Nach `/pages new` oder `/pages open` einfach sagen was passieren soll:
+After `/pages new` or `/pages open`, just tell Claude what to do:
 
 ```
 User: /pages new Professional Report
-Claude: Dokument "Professional Report" erstellt. Was soll ich damit machen?
+Claude: Created document from "Professional Report" template. What would you like me to do?
 
-User: Schreibe einen Titel "Quartalsreport Q1 2026" und darunter eine Zusammenfassung
-Claude: [fügt Text ein, formatiert den Titel größer]
+User: Write a title "Q1 2026 Quarterly Report" and a summary paragraph below it
+Claude: [adds text, formats the title in 24pt]
 
-User: Füge eine Tabelle mit Umsatzzahlen ein, 4 Zeilen, 3 Spalten
-Claude: [erstellt Tabelle, füllt Header]
+User: Add a table with revenue figures, 4 rows and 3 columns
+Claude: [creates table, fills headers]
 
-User: Exportiere das als PDF auf den Desktop
-Claude: PDF exportiert: ~/Desktop/Quartalsreport.pdf (12,340 bytes)
+User: Export as PDF to the Desktop
+Claude: Exported: ~/Desktop/Quarterly_Report.pdf (12,340 bytes)
 ```
 
-### CLI direkt
+### Direct CLI
 
 ```bash
-cli-anything-pages --help
-cli-anything-pages --json document new --template "Blank"
-cli-anything-pages text add "Hello World"
-cli-anything-pages export pdf ~/Desktop/test.pdf
-cli-anything-pages  # Startet interaktiven REPL-Modus
+pages-cli --help
+pages-cli --json document new --template "Blank"
+pages-cli text add "Hello World"
+pages-cli export pdf ~/Desktop/test.pdf
+pages-cli  # Launches interactive REPL
 ```
 
-## Verfügbare Vorlagen (Auswahl)
+## Available Templates (Selection)
 
-| Kategorie | Vorlagen |
-|-----------|----------|
-| Leer | Blank, Blank Landscape, Blank Black |
-| Berichte | Simple Report, Modern Report, Professional Report, Research Paper |
-| Briefe | Classic Letter, Professional Letter, Modern Letter, Business Letter |
+| Category | Templates |
+|----------|-----------|
+| Blank | Blank, Blank Landscape, Blank Black |
+| Reports | Simple Report, Modern Report, Professional Report, Research Paper |
+| Letters | Classic Letter, Professional Letter, Modern Letter, Business Letter |
 | CVs | Contemporary CV, Classic CV, Professional CV, Modern CV |
-| Newsletter | Classic Newsletter, Simple Newsletter |
-| Poster | Photo Poster, Event Poster, Type Poster |
-| Karten | Birthday Card, Photo Card, Party Invitation |
+| Newsletters | Classic Newsletter, Simple Newsletter |
+| Posters | Photo Poster, Event Poster, Type Poster |
+| Cards | Birthday Card, Photo Card, Party Invitation |
 
-Plus alle eigenen in Pages gespeicherten Vorlagen. Vollständige Liste: `/pages templates`
+Plus all custom templates saved in Pages. Full list: `/pages templates`
 
-## Export-Formate
+## Export Formats
 
-| Format | Befehl | Erweiterung |
-|--------|--------|-------------|
-| PDF | `/pages export pdf <pfad>` | .pdf |
-| Microsoft Word | `/pages export word <pfad>` | .docx |
-| EPUB | `/pages export epub <pfad>` | .epub |
-| Klartext | `/pages export text <pfad>` | .txt |
-| Rich Text | `/pages export rtf <pfad>` | .rtf |
+| Format | Command | Extension |
+|--------|---------|-----------|
+| PDF | `/pages export pdf <path>` | .pdf |
+| Microsoft Word | `/pages export word <path>` | .docx |
+| EPUB | `/pages export epub <path>` | .epub |
+| Plain Text | `/pages export text <path>` | .txt |
+| Rich Text | `/pages export rtf <path>` | .rtf |
 
-## Architektur
+## Architecture
 
 ```
 pages-cli/
-├── .claude-plugin/plugin.json    Plugin-Metadaten
-├── commands/pages.md             /pages Slash-Command
-├── skills/pages/SKILL.md         Skill mit NLP-Mapping
-├── agent-harness/                CLI-Backend
-│   ├── setup.py                  PyPI-Package
-│   └── cli_anything/pages/       Python-Module
+├── .claude-plugin/plugin.json    Plugin metadata
+├── commands/pages.md             /pages slash command
+├── skills/pages/SKILL.md         Skill with NLP mapping
+├── agent-harness/                CLI backend
+│   ├── setup.py                  PyPI package config
+│   └── pages_cli/                Python modules
 │       ├── pages_cli.py          Click CLI + REPL
 │       ├── core/                 document, text, tables, media, export, templates, session
-│       ├── utils/                AppleScript-Backend, REPL-Skin
-│       └── tests/                42 Tests (Unit + E2E)
+│       ├── utils/                AppleScript backend, REPL skin
+│       └── tests/                42 tests (unit + E2E)
 └── README.md
 ```
 
-Die CLI steuert Pages über dessen native **AppleScript-API** (`osascript`). Alle Operationen werden vom echten Apple Pages ausgeführt — die CLI ist ein Interface zu Pages, kein Ersatz.
+The CLI controls Pages through its native **AppleScript API** (`osascript`). All operations are performed by the real Apple Pages application — the CLI is an interface to Pages, not a replacement.
+
+## How It Works
+
+1. The plugin provides a `/pages` slash command and a skill that triggers on natural language
+2. Commands are translated into AppleScript calls via `osascript`
+3. Pages is launched automatically if not already running
+4. All document manipulation happens in the real Pages application
+5. Export produces real files (PDF with `%PDF-` magic bytes, Word as valid OOXML ZIP, etc.)
 
 ## Tests
 
 ```bash
 cd agent-harness
 source .venv/bin/activate
-python3 -m pytest cli_anything/pages/tests/ -v -s
+python3 -m pytest pages_cli/tests/ -v -s
 ```
 
-42 Tests (27 Unit + 15 E2E), 100% Pass Rate. E2E-Tests erstellen echte Dokumente und exportieren echte PDFs/Word-Dateien.
+42 tests (27 unit + 15 E2E), 100% pass rate. E2E tests create real documents and export real PDF/Word files with format verification.
 
-## Lizenz
+## License
 
 MIT

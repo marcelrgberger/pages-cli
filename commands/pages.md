@@ -1,98 +1,98 @@
 ---
 name: pages
-description: "Apple Pages steuern — /pages new, /pages open <pfad>, /pages export pdf <pfad>, /pages templates, /pages info, /pages close, /pages status"
+description: "Control Apple Pages — /pages new, /pages open <path>, /pages export pdf <path>, /pages templates, /pages info, /pages close, /pages status"
 arguments:
   - name: action
-    description: "Aktion: new [Vorlage], open <Pfad>, info, close, export <format> <pfad>, templates, status"
+    description: "Action: new [template], open <path>, info, close, export <format> <path>, templates, status"
     required: false
 ---
 
-# Pages CLI — Schnellzugriff
+# Pages CLI — Quick Access
 
-Du hast Zugriff auf die Apple Pages CLI (`cli-anything-pages`).
+You have access to the Apple Pages CLI (`pages-cli`).
 
-## Schritt 0: CLI sicherstellen
+## Step 0: Ensure CLI is available
 
-Prüfe ob `cli-anything-pages` verfügbar ist. Falls nicht, installiere es:
+Check if `pages-cli` is installed. If not, install it automatically:
 
 ```bash
-which cli-anything-pages || (cd ${CLAUDE_PLUGIN_ROOT}/agent-harness && python3 -m venv .venv && source .venv/bin/activate && pip install -e . && echo "cli-anything-pages installed")
+which pages-cli || (cd ${CLAUDE_PLUGIN_ROOT}/agent-harness && python3 -m venv .venv && source .venv/bin/activate && pip install -e . && echo "pages-cli installed")
 ```
 
-Falls eine venv existiert, aktiviere sie:
+If a venv already exists, activate it:
 
 ```bash
 test -f ${CLAUDE_PLUGIN_ROOT}/agent-harness/.venv/bin/activate && source ${CLAUDE_PLUGIN_ROOT}/agent-harness/.venv/bin/activate
 ```
 
-## Deine Aufgabe
+## Your task
 
-Parse das Argument `$ARGUMENTS` und führe die passende Aktion aus:
+Parse the argument `$ARGUMENTS` and execute the matching action:
 
-### Wenn kein Argument oder "new":
-1. Erstelle ein neues leeres Dokument:
+### If no argument or "new":
+1. Create a new blank document:
    ```bash
-   cli-anything-pages --json document new
+   pages-cli --json document new
    ```
-2. Informiere den User und warte auf Anweisungen was er damit machen möchte.
+2. Inform the user and wait for instructions on what to do with it.
 
-### Wenn "new <Vorlagenname>":
-1. Erstelle ein Dokument aus der genannten Vorlage:
+### If "new <template name>":
+1. Create a document from the named template:
    ```bash
-   cli-anything-pages --json document new --template "<Vorlagenname>"
+   pages-cli --json document new --template "<template name>"
    ```
-2. Informiere den User und warte auf Anweisungen.
+2. Inform the user and wait for instructions.
 
-### Wenn "open <Pfad>":
-1. Öffne das Dokument:
+### If "open <path>":
+1. Open the document:
    ```bash
-   cli-anything-pages --json document open "<Pfad>"
+   pages-cli --json document open "<path>"
    ```
-2. Hole Dokumentinfo:
+2. Get document info:
    ```bash
-   cli-anything-pages --json document info
+   pages-cli --json document info
    ```
-3. Zeige dem User eine Zusammenfassung (Name, Seiten, Wörter) und warte auf Anweisungen.
+3. Show the user a summary (name, pages, word count) and wait for instructions.
 
-### Wenn "info":
+### If "info":
 ```bash
-cli-anything-pages --json document info
-cli-anything-pages --json text word-count
+pages-cli --json document info
+pages-cli --json text word-count
 ```
-Zeige die Informationen übersichtlich an.
+Display the information in a clear format.
 
-### Wenn "close":
+### If "close":
 ```bash
-cli-anything-pages document close
-```
-
-### Wenn "export pdf <Pfad>" oder "export word <Pfad>" etc.:
-```bash
-cli-anything-pages export <format> "<Pfad>"
-```
-Bestätige den Export mit Dateigröße.
-
-### Wenn "templates":
-```bash
-cli-anything-pages --json template list
-```
-Zeige die Vorlagen gruppiert an (Berichte, Briefe, CVs, etc.).
-
-### Wenn "status":
-```bash
-cli-anything-pages --json session status
+pages-cli document close
 ```
 
-## Nach dem Öffnen/Erstellen
+### If "export pdf <path>" or "export word <path>" etc.:
+```bash
+pages-cli export <format> "<path>"
+```
+Confirm the export with file size.
 
-Sobald ein Dokument offen ist, übersetze natürliche Sprache des Users in CLI-Befehle:
+### If "templates":
+```bash
+pages-cli --json template list
+```
+Display the templates grouped by category (Reports, Letters, CVs, etc.).
 
-- Text schreiben → `cli-anything-pages text add "..."`
-- Formatierung → `cli-anything-pages text set-font --name "..." --size N`
-- Tabelle → `cli-anything-pages table add --rows N --cols N`
-- Bild → `cli-anything-pages media add-image "Pfad"`
-- Export → `cli-anything-pages export pdf/word/epub "Pfad"`
-- Review → `cli-anything-pages --json text get` → Analysiere den Text und schlage Verbesserungen vor
-- Formatierung prüfen → `cli-anything-pages --json document info` → Prüfe Konsistenz
+### If "status":
+```bash
+pages-cli --json session status
+```
 
-Verwende IMMER `--json` bei Abfrage-Befehlen für strukturierte Ausgabe.
+## After opening/creating
+
+Once a document is open, translate the user's natural language into CLI commands:
+
+- Write text → `pages-cli text add "..."`
+- Format text → `pages-cli text set-font --name "..." --size N`
+- Add table → `pages-cli table add --rows N --cols N`
+- Add image → `pages-cli media add-image "path"`
+- Export → `pages-cli export pdf/word/epub "path"`
+- Review → `pages-cli --json text get` → Analyze the text and suggest improvements
+- Check formatting → `pages-cli --json document info` → Check consistency
+
+ALWAYS use `--json` for query commands to get structured output.

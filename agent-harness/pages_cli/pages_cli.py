@@ -1,4 +1,4 @@
-"""cli-anything-pages — Click-based CLI for Apple Pages automation.
+"""pages-cli — Click-based CLI for Apple Pages automation.
 
 Main entry point for the CLI harness. Supports both one-shot commands
 and an interactive REPL mode (default when no subcommand is given).
@@ -10,9 +10,9 @@ from pathlib import Path
 
 import click
 
-from cli_anything.pages import __version__
-from cli_anything.pages.utils.repl_skin import ReplSkin
-from cli_anything.pages.utils.pages_backend import (
+from pages_cli import __version__
+from pages_cli.utils.repl_skin import ReplSkin
+from pages_cli.utils.pages_backend import (
     _run_applescript,
     _run_jxa,
     ensure_pages_running,
@@ -103,10 +103,10 @@ def _get_front_document_path() -> str:
               help="Output results as JSON.")
 @click.option("--document", "document_name", default=None,
               help="Target document name.")
-@click.version_option(version=__version__, prog_name="cli-anything-pages")
+@click.version_option(version=__version__, prog_name="pages-cli")
 @click.pass_context
 def cli(ctx, json_mode, document_name):
-    """cli-anything-pages — Agent-operable CLI for Apple Pages."""
+    """pages-cli — Agent-operable CLI for Apple Pages."""
     state = ctx.ensure_object(SessionState)
     state.json_mode = json_mode
     if document_name:
@@ -1145,7 +1145,7 @@ def _run_repl(ctx: click.Context):
             # does not think the command was already invoked
             cli.main(
                 args=args,
-                prog_name="cli-anything-pages",
+                prog_name="pages-cli",
                 standalone_mode=False,
                 **{"obj": state},
             )

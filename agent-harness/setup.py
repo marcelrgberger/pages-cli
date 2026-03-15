@@ -1,19 +1,19 @@
-from setuptools import setup, find_namespace_packages
+from setuptools import setup, find_packages
 
 setup(
-    name="cli-anything-pages",
+    name="pages-cli",
     version="1.0.0",
-    description="CLI harness for Apple Pages — agent-operable document creation",
+    description="CLI for Apple Pages — create, edit, format, and export documents",
     author="Marcel R. G. Berger",
     author_email="hello@marcelrgberger.com",
-    packages=find_namespace_packages(include=["cli_anything.*"]),
+    packages=find_packages(),
     install_requires=[
         "click>=8.0.0",
         "prompt-toolkit>=3.0.0",
     ],
     entry_points={
         "console_scripts": [
-            "cli-anything-pages=cli_anything.pages.pages_cli:main",
+            "pages-cli=pages_cli.pages_cli:main",
         ],
     },
     python_requires=">=3.10",

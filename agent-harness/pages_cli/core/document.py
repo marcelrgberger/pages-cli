@@ -1,6 +1,6 @@
 """Document management module for Apple Pages."""
 
-from cli_anything.pages.utils.pages_backend import _run_applescript, ensure_pages_running
+from pages_cli.utils.pages_backend import _run_applescript, ensure_pages_running
 
 
 def create_document(template: str = "Blank", name: str | None = None) -> dict:
