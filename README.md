@@ -165,6 +165,19 @@ User: Export as PDF and Word to the Desktop
 | `session save <path>` | Save session |
 | `session load <path>` | Load session |
 
+### Data Flow
+
+```mermaid
+graph LR
+    U[User / Claude] -->|/pages command| CLI[pages-cli]
+    CLI -->|osascript| AS[AppleScript]
+    AS -->|Controls| P[Apple Pages]
+    P -->|Export| F[PDF / Word / EPUB]
+
+    CLI -->|--json| J[JSON Output]
+    CLI -->|REPL| R[Interactive Mode]
+```
+
 ## Architecture
 
 ```
