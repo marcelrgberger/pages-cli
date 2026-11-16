@@ -39,15 +39,32 @@ def create_document(template: str = "Blank", name: str | None = None) -> dict:
 
 
 def open_document(path: str) -> dict:
-    """Open an existing .pages file."""
+    """Open an existing .pages file.
+
+    Raises if Pages hands back no document. The returned info describes the
+    opened document itself (not whichever window is frontmost) and carries
+    ``was_open``: True if the file was already open before this call, so the
+    caller can avoid closing a document someone else had open.
+    """
     ensure_pages_running()
     script = (
+        f'set wanted to (POSIX file "{_esc(path)}") as text\n'
         f'tell application "Pages"\n'
-        f'  open POSIX file "{_esc(path)}"\n'
+        f'  set wasOpen to false\n'
+        f'  repeat with x in documents\n'
+        f'    try\n'
+        f'      if (file of x as text) is wanted then set wasOpen to true\n'
+        f'    end try\n'
+        f'  end repeat\n'
+        f'  set d to open POSIX file "{_esc(path)}"\n'
+        f'  if d is missing value then error "Pages returned no document for {_esc(path)}"\n'
+        f'  return (name of d) & linefeed & (wasOpen as text)\n'
         f'end tell'
     )
-    _run_applescript(script)
-    return get_document_info()
+    name, _, was_open = _run_applescript(script).partition("\n")
+    info = get_document_info(name)
+    info["was_open"] = was_open.strip() == "true"
+    return info
 
 
 def close_document(name: str | None = None, saving: bool = True) -> None:
@@ -59,19 +76,52 @@ def close_document(name: str | None = None, saving: bool = True) -> None:
     _run_applescript(script)
 
 
-def save_document(name: str | None = None, path: str | None = None) -> None:
-    """Save the current or named document."""
+def save_document(
+    name: str | None = None,
+    path: str | None = None,
+    reopen: bool = False,
+) -> str:
+    """Save the current or named document and return the document's name.
+
+    ``save ... in POSIX file`` writes the file but leaves a new document's
+    window Untitled and disconnected from it. With ``reopen=True`` (requires
+    ``path``) that window is closed without saving and the written file is
+    opened, so the open document is the real file.
+    """
+    if reopen and not path:
+        raise ValueError("reopen requires a path to save to")
     ensure_pages_running()
     target = _doc_target(name)
-    if path:
+    if path and reopen:
         script = (
             f'tell application "Pages"\n'
-            f'  save {target} in POSIX file "{_esc(path)}"\n'
+            f'  set d to {target}\n'
+            f'  save d in POSIX file "{_esc(path)}"\n'
+            f'  delay 1\n'
+            f'  close d saving no\n'
+            f'  delay 1\n'
+            f'  set f to open POSIX file "{_esc(path)}"\n'
+            f'  if f is missing value then error "Saved {_esc(path)} but Pages would not reopen it"\n'
+            f'  return name of f\n'
+            f'end tell'
+        )
+    elif path:
+        script = (
+            f'tell application "Pages"\n'
+            f'  set d to {target}\n'
+            f'  save d in POSIX file "{_esc(path)}"\n'
+            f'  return name of d\n'
             f'end tell'
         )
     else:
-        script = f'tell application "Pages" to save {target}'
-    _run_applescript(script)
+        script = (
+            f'tell application "Pages"\n'
+            f'  set d to {target}\n'
+            f'  save d\n'
+            f'  return name of d\n'
+            f'end tell'
+        )
+    return _run_applescript(script).strip()
 
 
 # ---------------------------------------------------------------------------

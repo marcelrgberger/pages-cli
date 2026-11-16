@@ -197,6 +197,263 @@ def set_body_text(text: str, document: str | None = None) -> None:
     _run_applescript(script)
 
 
+# ---------------------------------------------------------------------------
+# Find / replace that keeps paragraph styles
+#
+# Pages scripting can replace a single word or character in place and the
+# paragraph keeps its font, size and style. Replacing the whole body text, or
+# assigning to a character range, does not (a range assignment corrupts the
+# text). So every span edit here is built from single-character assignments:
+# delete the span's trailing characters from last to first, then set its first
+# character to the replacement. Edits are applied last-to-first so earlier
+# positions stay valid, then the paragraphs are re-read and compared with what
+# the edit should have produced.
+# ---------------------------------------------------------------------------
+
+# Not whitespace, so osascript output stripping cannot eat an empty or
+# space-padded paragraph at either end.
+_PARA_MARK = "\u241e"
+_PARA_MARK_ID = ord(_PARA_MARK)
+
+
+def get_paragraphs(document: str | None = None) -> list[str]:
+    """Return the body text paragraphs, without their line terminators."""
+    ensure_pages_running()
+    target = _doc_target(document)
+    script = (
+        f'tell application "Pages"\n'
+        f'  set d to {target}\n'
+        f'  set mark to character id {_PARA_MARK_ID}\n'
+        f'  set out to ""\n'
+        f'  repeat with i from 1 to (count of paragraphs of body text of d)\n'
+        f'    set out to out & mark & ((paragraph i of body text of d) as text)\n'
+        f'  end repeat\n'
+        f'  return out & mark\n'
+        f'end tell'
+    )
+    raw = _run_applescript(script)
+    if not raw.startswith(_PARA_MARK) or not raw.endswith(_PARA_MARK):
+        raise RuntimeError("Unexpected paragraph listing from Pages.")
+    if raw == _PARA_MARK:
+        return []
+    return raw[1:-1].split(_PARA_MARK)
+
+
+def find_in_paragraphs(
+    paragraphs: list[str],
+    phrase: str,
+    paragraph: int | None = None,
+    ignore_case: bool = False,
+) -> list[dict]:
+    """Find every non-overlapping occurrence of ``phrase``.
+
+    Positions are 1-based character offsets within the paragraph; ``end`` is
+    the position of the last matched character.
+    """
+    if not phrase:
+        raise ValueError("Search text must not be empty.")
+    if "\n" in phrase or "\r" in phrase:
+        raise ValueError("Search text must sit within one paragraph (no line breaks).")
+    if paragraph is not None and not 1 <= paragraph <= len(paragraphs):
+        raise ValueError(
+            f"Paragraph {paragraph} out of range (document has {len(paragraphs)})."
+        )
+    matches: list[dict] = []
+    for number, text in enumerate(paragraphs, start=1):
+        if paragraph is not None and number != paragraph:
+            continue
+        haystack, needle = text, phrase
+        if ignore_case:
+            lowered = text.lower()
+            # str.lower() can change length (e.g. U+0130); positions would drift.
+            if len(lowered) == len(text):
+                haystack, needle = lowered, phrase.lower()
+        pos = haystack.find(needle)
+        while pos != -1:
+            end = pos + len(phrase)
+            matches.append({
+                "paragraph": number,
+                "start": pos + 1,
+                "end": end,
+                "match": text[pos:end],
+                "context": text[max(0, pos - 20):end + 20],
+            })
+            pos = haystack.find(needle, end)
+    return matches
+
+
+def find_text(
+    phrase: str,
+    paragraph: int | None = None,
+    ignore_case: bool = False,
+    document: str | None = None,
+) -> list[dict]:
+    """Find ``phrase`` in the document body (see find_in_paragraphs)."""
+    return find_in_paragraphs(
+        get_paragraphs(document), phrase, paragraph, ignore_case
+    )
+
+
+def _apply_ops(paragraphs: list[str], ops: list[tuple[int, int, int, str]]) -> list[str]:
+    """Predict the paragraphs after span edits (paragraph, start, end, new).
+
+    A line feed in ``new`` starts a new paragraph, as it does in Pages.
+    """
+    result = list(paragraphs)
+    for number, start, end, new in sorted(ops, reverse=True):
+        text = result[number - 1]
+        edited = text[:start - 1] + new + text[end:]
+        result[number - 1:number] = edited.split("\n")
+    return result
+
+
+def _span_script_lines(number: int, start: int, end: int, new: str) -> str:
+    ref = f"paragraph {number} of body text of d"
+    lines = [
+        f'    set character {k} of {ref} to ""'
+        for k in range(end, start, -1)
+    ]
+    lines.append(f'    set character {start} of {ref} to "{_esc(new)}"')
+    return "\n".join(lines)
+
+
+def _edit_spans(
+    paragraphs: list[str],
+    ops: list[tuple[int, int, int, str]],
+    document: str | None,
+) -> list[str]:
+    """Apply span edits in one script, then verify and return the paragraphs."""
+    for number, start, end, new in ops:
+        if not 1 <= number <= len(paragraphs):
+            raise ValueError(
+                f"Paragraph {number} out of range (document has {len(paragraphs)})."
+            )
+        length = len(paragraphs[number - 1])
+        if not 1 <= start <= end <= length:
+            raise ValueError(
+                f"Characters {start}-{end} out of range "
+                f"(paragraph {number} has {length})."
+            )
+        if "\r" in new:
+            raise ValueError("Use a line feed, not a carriage return, for new paragraphs.")
+
+    expected = _apply_ops(paragraphs, ops)
+    body = "\n".join(
+        _span_script_lines(number, start, end, new)
+        for number, start, end, new in sorted(ops, reverse=True)
+    )
+    target = _doc_target(document)
+    script = (
+        f'tell application "Pages"\n'
+        f'  set d to {target}\n'
+        f'  tell d\n'
+        f'{body}\n'
+        f'  end tell\n'
+        f'end tell'
+    )
+    _run_applescript(script)
+
+    actual = get_paragraphs(document)
+    if actual != expected:
+        for i in range(max(len(actual), len(expected))):
+            got = actual[i] if i < len(actual) else None
+            want = expected[i] if i < len(expected) else None
+            if got != want:
+                raise RuntimeError(
+                    f"Edit did not produce the expected text at paragraph {i + 1}: "
+                    f"expected {want!r}, found {got!r}. The document is modified; "
+                    f"close it without saving to discard the change."
+                )
+    return actual
+
+
+def replace_text(
+    old: str,
+    new: str,
+    paragraph: int | None = None,
+    occurrence: int | None = None,
+    ignore_case: bool = False,
+    document: str | None = None,
+) -> dict:
+    """Replace occurrences of ``old`` with ``new``, keeping paragraph styles.
+
+    Replaces every occurrence unless ``occurrence`` (1-based, counted among
+    the matches within scope) selects one. Nothing is saved.
+    """
+    paragraphs = get_paragraphs(document)
+    matches = find_in_paragraphs(paragraphs, old, paragraph, ignore_case)
+    if occurrence is not None:
+        if not 1 <= occurrence <= len(matches):
+            raise ValueError(
+                f"Occurrence {occurrence} out of range ({len(matches)} found)."
+            )
+        matches = [matches[occurrence - 1]]
+    if not matches:
+        return {"replaced": 0, "paragraphs": []}
+    ops = [(m["paragraph"], m["start"], m["end"], new) for m in matches]
+    _edit_spans(paragraphs, ops, document)
+    return {
+        "replaced": len(ops),
+        "paragraphs": sorted({m["paragraph"] for m in matches}),
+    }
+
+
+def replace_range(
+    paragraph: int,
+    start: int,
+    end: int,
+    new: str,
+    document: str | None = None,
+) -> dict:
+    """Replace characters ``start``-``end`` of a paragraph with ``new``.
+
+    ``new`` may be empty (delete). Nothing is saved.
+    """
+    paragraphs = get_paragraphs(document)
+    actual = _edit_spans(paragraphs, [(paragraph, start, end, new)], document)
+    return {"paragraph": paragraph, "text": actual[paragraph - 1]}
+
+
+def replace_word(
+    paragraph: int,
+    word_index: int,
+    new: str,
+    document: str | None = None,
+) -> dict:
+    """Replace word ``word_index`` of a paragraph, keeping its style.
+
+    Word boundaries are Pages' own, so the result is checked only for the
+    other paragraphs being untouched. Nothing is saved.
+    """
+    if "\r" in new:
+        raise ValueError("Use a line feed, not a carriage return, for new paragraphs.")
+    paragraphs = get_paragraphs(document)
+    if not 1 <= paragraph <= len(paragraphs):
+        raise ValueError(
+            f"Paragraph {paragraph} out of range (document has {len(paragraphs)})."
+        )
+    target = _doc_target(document)
+    script = (
+        f'tell application "Pages"\n'
+        f'  set d to {target}\n'
+        f'  set word {word_index} of paragraph {paragraph} of body text of d to "{_esc(new)}"\n'
+        f'end tell'
+    )
+    _run_applescript(script)
+    actual = get_paragraphs(document)
+    shift = len(actual) - len(paragraphs)
+    untouched = (
+        actual[:paragraph - 1] == paragraphs[:paragraph - 1]
+        and (actual[paragraph + shift:] == paragraphs[paragraph:])
+    )
+    if shift < 0 or not untouched:
+        raise RuntimeError(
+            "Word replacement changed text outside the target paragraph. "
+            "The document is modified; close it without saving to discard the change."
+        )
+    return {"paragraph": paragraph, "text": "\n".join(actual[paragraph - 1:paragraph + shift])}
+
+
 def get_body_text(document: str | None = None) -> str:
     """Get the body text of the document."""
     ensure_pages_running()

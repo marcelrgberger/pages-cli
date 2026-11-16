@@ -171,6 +171,42 @@ def document_open(ctx, file_path):
     _output(ctx, {"message": f"Opened: {result.get('name', '')}", **result})
 
 
+@document.command("read-file")
+@click.argument("file_path")
+@click.option("--numbered", is_flag=True, default=False,
+              help="Prefix each paragraph (line-feed separated) with its number.")
+@click.option("--other", "show_other", is_flag=True, default=False,
+              help="Also list text from text boxes, shapes, headers and footnotes.")
+@click.pass_context
+def document_read_file(ctx, file_path, numbered, show_other):
+    """Read the text of a .pages file without opening Pages.
+
+    Works on the file on disk, so it needs no running Pages and never
+    touches an open document. Table cell text is not included.
+    """
+    from pages_cli.core.offline import read_text
+    abs_path = str(Path(file_path).expanduser().resolve())
+    result, err = _safe_run(read_text, abs_path)
+    if err:
+        _output(ctx, {"error": f"Failed to read file: {err}"})
+        return
+    paragraphs = result["body"].split("\n")
+    if ctx.ensure_object(SessionState).json_mode:
+        data = {"path": abs_path, "paragraphs": paragraphs, "body": result["body"]}
+        if show_other:
+            data["other"] = result["other"]
+        _output(ctx, data)
+        return
+    if numbered:
+        click.echo("\n".join(f"{n}: {t}" for n, t in enumerate(paragraphs, start=1)))
+    else:
+        click.echo(result["body"])
+    if show_other:
+        for item in result["other"]:
+            kind = "text box/shape" if item["kind"] is None else f"kind {item['kind']}"
+            click.echo(f"\n--- {kind} ---\n{item['text']}")
+
+
 @document.command("close")
 @click.option("--no-save", is_flag=True, default=False,
               help="Close without saving.")
@@ -192,18 +228,34 @@ def document_close(ctx, no_save):
 @document.command("save")
 @click.option("--path", "save_path", default=None,
               help="File path to save to.")
+@click.option("--reopen", is_flag=True, default=False,
+              help="With --path: close the saved-as window and reopen the "
+                   "written file, so the open document is the real file "
+                   "rather than an Untitled window. (A document edited before "
+                   "its first save-as stays Untitled otherwise.)")
 @click.pass_context
-def document_save(ctx, save_path):
+def document_save(ctx, save_path, reopen):
     """Save the current document."""
     from pages_cli.core.document import save_document
     doc = _get_doc(ctx)
+    if reopen and not save_path:
+        _output(ctx, {"error": "--reopen requires --path."})
+        return
     abs_path = str(Path(save_path).expanduser().resolve()) if save_path else None
-    _, err = _safe_run(save_document, name=doc, path=abs_path)
+    name, err = _safe_run(save_document, name=doc, path=abs_path, reopen=reopen)
     if err:
         _output(ctx, {"error": f"Failed to save document: {err}"})
         return
-    name = _get_front_document_name()
-    _output(ctx, {"message": f"Saved: {name}", "document": name})
+    if reopen:
+        ctx.ensure_object(SessionState).current_document = name
+    message = f"Saved: {name}"
+    if abs_path and not reopen and name != Path(abs_path).name:
+        message += (
+            f". Warning: the open window is still '{name}', not linked to the "
+            f"saved file, so opening that file again would give a second copy. "
+            f"Re-run with --reopen to close it and open the saved file."
+        )
+    _output(ctx, {"message": message, "document": name})
 
 
 @document.command("info")
@@ -450,6 +502,109 @@ def text_get(ctx):
         _output(ctx, {"error": f"Failed to get text: {err}"})
         return
     _output(ctx, {"text": result, "length": len(result) if result else 0})
+
+
+@text.command("find")
+@click.argument("phrase")
+@click.option("--paragraph", "para_index", type=int, default=None,
+              help="Only search this paragraph (1-based).")
+@click.option("--ignore-case", is_flag=True, default=False)
+@click.pass_context
+def text_find(ctx, phrase, para_index, ignore_case):
+    """Find PHRASE in the body text; report paragraph and character positions."""
+    from pages_cli.core.text import find_text
+    doc = _get_doc(ctx)
+    matches, err = _safe_run(
+        find_text, phrase, paragraph=para_index, ignore_case=ignore_case, document=doc,
+    )
+    if err:
+        _output(ctx, {"error": f"Failed to search text: {err}"})
+        return
+    if ctx.ensure_object(SessionState).json_mode:
+        _output(ctx, {"count": len(matches), "matches": matches})
+    elif not matches:
+        _output(ctx, {"message": "No matches."})
+    else:
+        _output(ctx, {
+            "headers": ["Paragraph", "Start", "End", "Context"],
+            "rows": [[m["paragraph"], m["start"], m["end"], m["context"]] for m in matches],
+        })
+
+
+@text.command("replace")
+@click.argument("old")
+@click.argument("new")
+@click.option("--paragraph", "para_index", type=int, default=None,
+              help="Only replace within this paragraph (1-based).")
+@click.option("--occurrence", type=int, default=None,
+              help="Replace only the Nth match (1-based) instead of all.")
+@click.option("--ignore-case", is_flag=True, default=False)
+@click.pass_context
+def text_replace(ctx, old, new, para_index, occurrence, ignore_case):
+    """Replace OLD with NEW, keeping each paragraph's style. Does not save."""
+    from pages_cli.core.text import replace_text
+    doc = _get_doc(ctx)
+    result, err = _safe_run(
+        replace_text, old, new, paragraph=para_index, occurrence=occurrence,
+        ignore_case=ignore_case, document=doc,
+    )
+    if err:
+        _output(ctx, {"error": f"Failed to replace text: {err}"})
+        return
+    if result["replaced"] == 0:
+        _output(ctx, {"error": f"No matches for {old!r}; nothing changed."})
+        return
+    _output(ctx, {"message": f"Replaced {result['replaced']} occurrence(s). Not saved.", **result})
+
+
+@text.command("replace-word")
+@click.argument("para_index", type=int)
+@click.argument("word_index", type=int)
+@click.argument("new")
+@click.pass_context
+def text_replace_word(ctx, para_index, word_index, new):
+    """Replace word WORD_INDEX of paragraph PARA_INDEX with NEW. Does not save."""
+    from pages_cli.core.text import replace_word
+    doc = _get_doc(ctx)
+    result, err = _safe_run(replace_word, para_index, word_index, new, document=doc)
+    if err:
+        _output(ctx, {"error": f"Failed to replace word: {err}"})
+        return
+    _output(ctx, {"message": "Word replaced. Not saved.", **result})
+
+
+@text.command("replace-char")
+@click.argument("para_index", type=int)
+@click.argument("char_index", type=int)
+@click.argument("new")
+@click.pass_context
+def text_replace_char(ctx, para_index, char_index, new):
+    """Replace character CHAR_INDEX of paragraph PARA_INDEX with NEW. Does not save."""
+    from pages_cli.core.text import replace_range
+    doc = _get_doc(ctx)
+    result, err = _safe_run(
+        replace_range, para_index, char_index, char_index, new, document=doc,
+    )
+    if err:
+        _output(ctx, {"error": f"Failed to replace character: {err}"})
+        return
+    _output(ctx, {"message": "Character replaced. Not saved.", **result})
+
+
+@text.command("delete-range")
+@click.argument("para_index", type=int)
+@click.argument("start", type=int)
+@click.argument("end", type=int)
+@click.pass_context
+def text_delete_range(ctx, para_index, start, end):
+    """Delete characters START-END (inclusive) of paragraph PARA_INDEX. Does not save."""
+    from pages_cli.core.text import replace_range
+    doc = _get_doc(ctx)
+    result, err = _safe_run(replace_range, para_index, start, end, "", document=doc)
+    if err:
+        _output(ctx, {"error": f"Failed to delete range: {err}"})
+        return
+    _output(ctx, {"message": "Range deleted. Not saved.", **result})
 
 
 @text.command("set-font")

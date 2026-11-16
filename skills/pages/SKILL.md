@@ -56,8 +56,11 @@ pages-cli --json document new --template "Professional Report"
 pages-cli --json document open "/path/to/document.pages"
 pages-cli --json document info
 pages-cli --json document list
+# Read text straight from a .pages file on disk: no Pages, nothing touched. Table cell text is not included.
+pages-cli document read-file "/path/to/document.pages" --numbered
 pages-cli document save
 pages-cli document save --path "/path/to/save.pages"
+pages-cli document save --path "/path/to/save.pages" --reopen   # close the saved-as window, reopen the written file
 pages-cli document close
 pages-cli document close --no-save
 ```
@@ -65,7 +68,13 @@ pages-cli document close --no-save
 **Text:**
 ```bash
 pages-cli text add "New text"
-pages-cli text set "Replace entire body text"
+pages-cli text set "Replace entire body text"   # resets paragraph styles; prefer the targeted edits below
+# Targeted edits keep each paragraph's style. They change the open document and do not save.
+pages-cli --json text find "phrase" --ignore-case
+pages-cli text replace "old" "new" --paragraph 3 --occurrence 1
+pages-cli text replace-word 3 2 "new"
+pages-cli text replace-char 3 14 ","
+pages-cli text delete-range 3 10 20
 pages-cli --json text get
 pages-cli text set-font --name "Helvetica Neue" --size 14
 pages-cli text set-font --name "Helvetica Neue" --size 24 --paragraph 1

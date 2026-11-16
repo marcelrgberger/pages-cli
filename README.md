@@ -66,9 +66,10 @@ User: Export as PDF and Word to the Desktop
 | Command | Description |
 |---------|-------------|
 | `document new [--template T] [--name N]` | Create document |
-| `document open <path>` | Open .pages file |
+| `document open <path>` | Open .pages file (reports `was_open` if it was already open) |
+| `document read-file <path> [--numbered] [--other]` | Read a .pages file's text from disk, without Pages |
 | `document close [--no-save]` | Close document |
-| `document save [--path P]` | Save document |
+| `document save [--path P] [--reopen]` | Save document (`--reopen`: close the saved-as window and reopen the written file) |
 | `document info` | Name, pages, words, characters |
 | `document list` | List open documents |
 | `document set-password <pw> [--hint H]` | Password protect |
@@ -86,7 +87,12 @@ User: Export as PDF and Word to the Desktop
 |---------|-------------|
 | `text add <text>` | Append text |
 | `text add-paragraph <text> [styling opts]` | Add styled paragraph |
-| `text set <text>` | Replace all body text |
+| `text set <text>` | Replace all body text (resets paragraph styles) |
+| `text find <phrase> [--paragraph N] [--ignore-case]` | Find text; paragraph and character positions |
+| `text replace <old> <new> [--paragraph N] [--occurrence N] [--ignore-case]` | Replace text, keeping paragraph styles; not saved |
+| `text replace-word <para> <word> <new>` | Replace one word, keeping style; not saved |
+| `text replace-char <para> <char> <new>` | Replace one character, keeping style; not saved |
+| `text delete-range <para> <start> <end>` | Delete characters (inclusive), keeping style; not saved |
 | `text get` | Get body text |
 | `text set-font [--name F] [--size S] [--paragraph/--word/--char N]` | Set font |
 | `text get-font [--paragraph/--word/--char N]` | Get font name |
