@@ -142,16 +142,22 @@ def ensure_pages_running() -> None:
 def is_pages_running() -> bool:
     """Check if Apple Pages is currently running.
 
+    Uses ``pgrep -x Pages`` rather than System Events, which may not be
+    authorized for the calling process.
+
     Returns:
         bool: True if Pages is running, False otherwise.
     """
     try:
-        result = _run_applescript(
-            'tell application "System Events" to (name of processes) contains "Pages"'
+        result = subprocess.run(
+            ["pgrep", "-x", "Pages"],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
-        return result.strip().lower() == "true"
-    except RuntimeError:
+    except (OSError, subprocess.TimeoutExpired):
         return False
+    return result.returncode == 0
 
 
 def quit_pages(saving: bool = True) -> None:
