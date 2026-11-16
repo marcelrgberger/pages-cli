@@ -254,6 +254,15 @@ def ensure_pages_running():
 - AppleScript provides a stable, version-resilient API.
 - Pages MUST be running, but `osascript` auto-launches it if needed.
 
+**One deliberate exception: `document read-file` (read-only).** It decodes
+`Index/Document.iwa` directly (zip or bundle, Snappy-compressed chunks,
+protobuf `TSWP.StorageArchive` messages; storage kind 0 is the body) in
+`core/offline.py`, so a file's text can be read without Pages running and without
+touching an open document. It never writes. The format is undocumented and
+reverse-engineered, so a future Pages release could change it; it was checked
+against live Pages on every document tried (see `document read-file` below). All
+edits still go through AppleScript.
+
 ### Interaction Model
 
 Both REPL and subcommand CLI, with REPL as default (per HARNESS.md convention).
@@ -282,11 +291,12 @@ State is maintained by the running Pages application itself. The CLI tracks:
 |------------------------------------------|-------------------------------------------------------------------------------------------------|
 | `document new`                           | `tell application "Pages" to make new document with properties {document template:template "Blank"}` |
 | `document new --template "Essay"`        | `tell application "Pages" to make new document with properties {document template:template "Essay"}` |
-| `document open <path>`                   | `tell application "Pages" to open POSIX file "<path>"`                                          |
+| `document open <path>`                   | `tell application "Pages" to open POSIX file "<path>"` (errors on `missing value`; result has `was_open`) |
 | `document close`                         | `tell application "Pages" to close document "<name>"`                                           |
 | `document close --save`                  | `tell application "Pages" to close document "<name>" saving yes`                                |
 | `document save`                          | `tell application "Pages" to save document "<name>"`                                            |
-| `document save --to <path>`              | `tell application "Pages" to save document "<name>" in POSIX file "<path>"`                     |
+| `document save --path <path> [--reopen]` | `tell application "Pages" to save document "<name>" in POSIX file "<path>"`; `--reopen` then closes that window saving no and opens `<path>` |
+| `document read-file <path> [--numbered] [--other] [--json]` | None: reads `Index/Document.iwa` from the file on disk (see below) |
 | `document info`                          | Queries: `name`, `id`, `document body`, `facing pages`, `password protected`, `current page`, count of pages/sections/tables/images |
 | `document list`                          | `tell application "Pages" to get name of every document`                                        |
 
@@ -326,6 +336,19 @@ tell application "Pages"
 end tell
 ```
 
+**`document read-file` -- text without Pages:**
+- Accepts a zip `.pages`, a bundle containing `Index/Document.iwa`, or a bundle
+  containing `Index.zip`. Pages '09 (`index.xml`) is rejected.
+- Returns the body (storage kind 0) and, with `--other`, non-empty text boxes,
+  shapes, headers and footnotes. Table cell text is not included.
+- Paragraph numbering follows Pages, not just line feeds: paragraphs also break at
+  U+0004 and U+0005 (stored in documents; verified on a 632-paragraph document,
+  where a line-feed split gave 573) and at U+000B, U+000C, U+000D and U+2029 (by
+  insertion test). U+2028 and U+FFFC stay inside a paragraph. Other stored control
+  characters (e.g. U+000E) are left inline and unchecked.
+- It reads the saved file: unsaved edits, and edits Pages has not yet autosaved,
+  are not visible.
+
 #### `text` -- Text Operations
 
 | CLI Command                                        | AppleScript                                                                                                 |
@@ -333,9 +356,39 @@ end tell
 | `text get`                                         | `tell application "Pages" to get body text of document "<name>"`                                            |
 | `text set "<content>"`                             | `tell application "Pages" to set body text of document "<name>" to "<content>"`                              |
 | `text add "<content>"`                             | `tell application "Pages" to tell document "<name>" to set body text to (body text as text) & "<content>"`  |
+| `text find "<phrase>" [--paragraph N] [--ignore-case]` | Reads every paragraph in one script, searches in Python (1-based paragraph and character positions) |
+| `text replace "<old>" "<new>" [--paragraph N] [--occurrence N] [--ignore-case]` | Style-preserving span edit, see below |
+| `text replace-word <para> <word> "<new>"`          | `set word <w> of paragraph <p> of body text of document "<name>" to "<new>"`                                |
+| `text replace-char <para> <char> "<new>"`          | Style-preserving span edit of one character                                                                 |
+| `text delete-range <para> <start> <end>`           | Style-preserving span edit with empty replacement (inclusive)                                               |
 | `text set-font --name "Helvetica" --size 14`       | See below                                                                                                   |
 | `text set-color --r 255 --g 0 --b 0`              | See below                                                                                                   |
 | `text word-count`                                  | `tell application "Pages" to count words of body text of document "<name>"`                                 |
+
+**Style-preserving edits (`replace`, `replace-char`, `delete-range`):**
+Assigning a word or character keeps the paragraph's font, size and style;
+`set body text` does not (everything takes the first style), and assigning to a
+character *range* (`set (characters 1 thru 5 of ...) to`) corrupts the text. So a
+span is edited with single-character assignments, last character first:
+```applescript
+tell application "Pages"
+    tell document "<name>"
+        set character 16 of paragraph 2 of body text to ""   -- trailing characters, last to first
+        set character 15 of paragraph 2 of body text to ""
+        set character 8 of paragraph 2 of body text to "line" -- first character takes the replacement
+    end tell
+end tell
+```
+- Edits across the document are applied last-to-first so earlier positions stay valid.
+- Positions are Pages' characters, which equalled Python code points in every
+  paragraph of a 632-paragraph test document, including right-to-left text with combining marks.
+- A line feed in the replacement starts a new paragraph in the same style.
+- A replacement that straddles a style change takes the style of the span's first
+  character; the rest of the original runs keep their own.
+- After the edit all paragraphs are re-read and compared with the predicted result;
+  a mismatch is raised with the first differing paragraph. Nothing is saved by the
+  CLI, but see Autosave Behaviour.
+- Edits go out in batches (see Timeout Considerations).
 
 **`text set-font` -- setting font on a paragraph range:**
 ```applescript
@@ -601,23 +654,50 @@ Documents can be referenced by:
 The CLI uses `--document <name>` as the primary targeting mechanism. If omitted,
 the front-most document (index 1) is used.
 
+**Unsaved documents are renamed by Pages.** A new document is retitled from its
+content within seconds (one holding "The cat sat on the mat" became "Cat on Mat"),
+so a name captured at creation stops resolving. For unsaved documents use the
+front document, or save first and use the file name.
+
 ### Timeout Considerations
 
 - Most AppleScript operations complete in < 1 second.
 - Large document exports (many pages, high-res images) may take 5-15 seconds.
 - Template listing enumerates all installed templates and takes 1-3 seconds.
 - The CLI sets a 30-second default timeout, configurable per-command.
+- Each character assignment in a text edit is one Apple event of about 20 ms, so a
+  single script can only carry roughly 1,400 of them. Text edits are therefore sent
+  in batches of 600 (`_MAX_STEPS_PER_SCRIPT` in `core/text.py`): measured, 247
+  matches (741 assignments) took about 27 s end to end and 1,929 about 46 s. A batch
+  that fails reports how many assignments were applied, since earlier batches stay
+  applied.
 
 ### Pages Launch Behavior
 
 - `osascript -e 'tell application "Pages" to ...'` auto-launches Pages if not
   running. The first command after launch takes 2-5 seconds longer.
-- The CLI's `session status` command checks if Pages is running via:
-  ```applescript
-  tell application "System Events" to (name of processes) contains "Pages"
-  ```
+- The CLI checks whether Pages is running with `pgrep -x Pages`
+  (`is_pages_running` in `utils/pages_backend.py`). System Events is not used, since
+  the calling process may not be authorised to control it.
 - To prevent visible window flashing, use `activate` only when needed; otherwise
   operations run against the application without bringing it to the foreground.
+
+### Autosave Behaviour
+
+Measured on macOS 27.2 with Pages Creator Studio 15.4; re-check on other versions.
+
+- **A saved document is autosaved in place.** About 10-25 seconds after an edit
+  the change is written into the file and `modified` drops to false. Closing with
+  `saving no` afterwards does not revert it. The CLI never calls save after an
+  edit, but that does not make an edit temporary: a copy or backup is the only
+  reliable undo.
+- **An unsaved document is autosaved into the iCloud Pages folder** as
+  `Untitled N.pages`, even when closed with `saving no`.
+- **`save <doc> in POSIX file` may leave the window Untitled.** A document edited by
+  script before its first save-as keeps an Untitled window that is not linked to the
+  written file; opening that file again then gives a second copy. `document save
+  --path P` warns when the returned name differs from the file name, and `--reopen`
+  closes that window without saving and opens the written file.
 
 ---
 
@@ -643,6 +723,7 @@ pages/
             │   ├── table.py       # Table operations: add, set-cell, get-cell, merge, sort
             │   ├── media.py       # Media operations: add-image, add-shape, list
             │   ├── export.py      # Export pipeline: pdf, word, epub, text, rtf
+            │   ├── offline.py     # Read text from a .pages file without Pages (read-only)
             │   ├── template.py    # Template listing and info
             │   ├── password.py    # Password set/remove/status
             │   └── session.py     # Session state, Pages status
@@ -653,6 +734,8 @@ pages/
             └── tests/
                 ├── TEST.md            # Test plan and results
                 ├── test_core.py       # Unit tests
+                ├── test_text_edit.py  # Style-preserving text edits, open/save (osascript mocked)
+                ├── test_offline.py    # Offline reader (synthetic IWA data, no Pages)
                 └── test_full_e2e.py   # E2E tests (real Pages interaction)
 ```
 
