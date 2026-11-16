@@ -174,7 +174,7 @@ def document_open(ctx, file_path):
 @document.command("read-file")
 @click.argument("file_path")
 @click.option("--numbered", is_flag=True, default=False,
-              help="Prefix each paragraph (line-feed separated) with its number.")
+              help="Prefix each paragraph with its Pages paragraph number.")
 @click.option("--other", "show_other", is_flag=True, default=False,
               help="Also list text from text boxes, shapes, headers and footnotes.")
 @click.pass_context
@@ -184,13 +184,13 @@ def document_read_file(ctx, file_path, numbered, show_other):
     Works on the file on disk, so it needs no running Pages and never
     touches an open document. Table cell text is not included.
     """
-    from pages_cli.core.offline import read_text
+    from pages_cli.core.offline import read_text, split_paragraphs
     abs_path = str(Path(file_path).expanduser().resolve())
     result, err = _safe_run(read_text, abs_path)
     if err:
         _output(ctx, {"error": f"Failed to read file: {err}"})
         return
-    paragraphs = result["body"].split("\n")
+    paragraphs = split_paragraphs(result["body"])
     if ctx.ensure_object(SessionState).json_mode:
         data = {"path": abs_path, "paragraphs": paragraphs, "body": result["body"]}
         if show_other:
@@ -541,7 +541,7 @@ def text_find(ctx, phrase, para_index, ignore_case):
 @click.option("--ignore-case", is_flag=True, default=False)
 @click.pass_context
 def text_replace(ctx, old, new, para_index, occurrence, ignore_case):
-    """Replace OLD with NEW, keeping each paragraph's style. Does not save."""
+    """Replace OLD with NEW, keeping each paragraph's style. Pages autosaves the open document."""
     from pages_cli.core.text import replace_text
     doc = _get_doc(ctx)
     result, err = _safe_run(
@@ -554,7 +554,7 @@ def text_replace(ctx, old, new, para_index, occurrence, ignore_case):
     if result["replaced"] == 0:
         _output(ctx, {"error": f"No matches for {old!r}; nothing changed."})
         return
-    _output(ctx, {"message": f"Replaced {result['replaced']} occurrence(s). Not saved.", **result})
+    _output(ctx, {"message": f"Replaced {result['replaced']} occurrence(s). pages-cli did not save, but Pages autosaves open documents.", **result})
 
 
 @text.command("replace-word")
@@ -563,14 +563,14 @@ def text_replace(ctx, old, new, para_index, occurrence, ignore_case):
 @click.argument("new")
 @click.pass_context
 def text_replace_word(ctx, para_index, word_index, new):
-    """Replace word WORD_INDEX of paragraph PARA_INDEX with NEW. Does not save."""
+    """Replace word WORD_INDEX of paragraph PARA_INDEX with NEW. Pages autosaves the open document."""
     from pages_cli.core.text import replace_word
     doc = _get_doc(ctx)
     result, err = _safe_run(replace_word, para_index, word_index, new, document=doc)
     if err:
         _output(ctx, {"error": f"Failed to replace word: {err}"})
         return
-    _output(ctx, {"message": "Word replaced. Not saved.", **result})
+    _output(ctx, {"message": "Word replaced. pages-cli did not save, but Pages autosaves open documents.", **result})
 
 
 @text.command("replace-char")
@@ -579,7 +579,7 @@ def text_replace_word(ctx, para_index, word_index, new):
 @click.argument("new")
 @click.pass_context
 def text_replace_char(ctx, para_index, char_index, new):
-    """Replace character CHAR_INDEX of paragraph PARA_INDEX with NEW. Does not save."""
+    """Replace character CHAR_INDEX of paragraph PARA_INDEX with NEW. Pages autosaves the open document."""
     from pages_cli.core.text import replace_range
     doc = _get_doc(ctx)
     result, err = _safe_run(
@@ -588,7 +588,7 @@ def text_replace_char(ctx, para_index, char_index, new):
     if err:
         _output(ctx, {"error": f"Failed to replace character: {err}"})
         return
-    _output(ctx, {"message": "Character replaced. Not saved.", **result})
+    _output(ctx, {"message": "Character replaced. pages-cli did not save, but Pages autosaves open documents.", **result})
 
 
 @text.command("delete-range")
@@ -597,14 +597,14 @@ def text_replace_char(ctx, para_index, char_index, new):
 @click.argument("end", type=int)
 @click.pass_context
 def text_delete_range(ctx, para_index, start, end):
-    """Delete characters START-END (inclusive) of paragraph PARA_INDEX. Does not save."""
+    """Delete characters START-END (inclusive) of paragraph PARA_INDEX. Pages autosaves the open document."""
     from pages_cli.core.text import replace_range
     doc = _get_doc(ctx)
     result, err = _safe_run(replace_range, para_index, start, end, "", document=doc)
     if err:
         _output(ctx, {"error": f"Failed to delete range: {err}"})
         return
-    _output(ctx, {"message": "Range deleted. Not saved.", **result})
+    _output(ctx, {"message": "Range deleted. pages-cli did not save, but Pages autosaves open documents.", **result})
 
 
 @text.command("set-font")

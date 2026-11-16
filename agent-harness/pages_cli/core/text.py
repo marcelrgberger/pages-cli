@@ -307,14 +307,38 @@ def _apply_ops(paragraphs: list[str], ops: list[tuple[int, int, int, str]]) -> l
     return result
 
 
-def _span_script_lines(number: int, start: int, end: int, new: str) -> str:
-    ref = f"paragraph {number} of body text of d"
-    lines = [
-        f'    set character {k} of {ref} to ""'
-        for k in range(end, start, -1)
-    ]
-    lines.append(f'    set character {start} of {ref} to "{_esc(new)}"')
-    return "\n".join(lines)
+# Each character assignment is one Apple event of roughly 20 ms, and every
+# osascript call is killed after 30 s. A bulk edit is therefore sent in batches
+# of this many assignments (about 12 s each) rather than as one long script.
+_MAX_STEPS_PER_SCRIPT = 600
+
+_AUTOSAVE_WARNING = (
+    "Pages autosaves open documents into their file within about 30 seconds, and "
+    "closing without saving does not undo that, so restore from your backup copy "
+    "if you need to undo."
+)
+
+
+def _span_steps(number: int, start: int, end: int, new: str) -> list[tuple[int, int, str]]:
+    """Character assignments for one span: trailing characters last to first, then the first."""
+    steps = [(number, k, "") for k in range(end, start, -1)]
+    steps.append((number, start, new))
+    return steps
+
+
+def _steps_script(steps: list[tuple[int, int, str]], target: str) -> str:
+    lines = "\n".join(
+        f'    set character {k} of paragraph {number} of body text of d to "{_esc(text)}"'
+        for number, k, text in steps
+    )
+    return (
+        f'tell application "Pages"\n'
+        f'  set d to {target}\n'
+        f'  tell d\n'
+        f'{lines}\n'
+        f'  end tell\n'
+        f'end tell'
+    )
 
 
 def _edit_spans(
@@ -338,20 +362,22 @@ def _edit_spans(
             raise ValueError("Use a line feed, not a carriage return, for new paragraphs.")
 
     expected = _apply_ops(paragraphs, ops)
-    body = "\n".join(
-        _span_script_lines(number, start, end, new)
+    steps = [
+        step
         for number, start, end, new in sorted(ops, reverse=True)
-    )
+        for step in _span_steps(number, start, end, new)
+    ]
     target = _doc_target(document)
-    script = (
-        f'tell application "Pages"\n'
-        f'  set d to {target}\n'
-        f'  tell d\n'
-        f'{body}\n'
-        f'  end tell\n'
-        f'end tell'
-    )
-    _run_applescript(script)
+    for first in range(0, len(steps), _MAX_STEPS_PER_SCRIPT):
+        batch = steps[first:first + _MAX_STEPS_PER_SCRIPT]
+        try:
+            _run_applescript(_steps_script(batch, target))
+        except RuntimeError as exc:
+            raise RuntimeError(
+                f"Edit stopped part-way: {first} of {len(steps)} character "
+                f"assignments were applied, so the document is partly edited. "
+                f"{_AUTOSAVE_WARNING} Cause: {exc}"
+            ) from None
 
     actual = get_paragraphs(document)
     if actual != expected:
@@ -361,8 +387,8 @@ def _edit_spans(
             if got != want:
                 raise RuntimeError(
                     f"Edit did not produce the expected text at paragraph {i + 1}: "
-                    f"expected {want!r}, found {got!r}. The document is modified; "
-                    f"close it without saving to discard the change."
+                    f"expected {want!r}, found {got!r}. The document is modified. "
+                    f"{_AUTOSAVE_WARNING}"
                 )
     return actual
 
@@ -449,7 +475,7 @@ def replace_word(
     if shift < 0 or not untouched:
         raise RuntimeError(
             "Word replacement changed text outside the target paragraph. "
-            "The document is modified; close it without saving to discard the change."
+            f"The document is modified. {_AUTOSAVE_WARNING}"
         )
     return {"paragraph": paragraph, "text": "\n".join(actual[paragraph - 1:paragraph + shift])}
 

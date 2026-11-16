@@ -14,6 +14,7 @@ footnotes and similar are other storages. Table cell text is held elsewhere
 and is not returned.
 """
 
+import re
 import zipfile
 from pathlib import Path
 
@@ -183,11 +184,27 @@ def _read_document_iwa(path: Path) -> bytes:
     )
 
 
+# What Pages' scripting counts as a paragraph boundary. The boundary character
+# is not part of any paragraph. U+0004 and U+0005 (stored in documents, and not
+# insertable by script) were checked against a real 632-paragraph document: the
+# split matched Pages' own list exactly. U+000B, U+000C, U+000D and U+2029 were
+# checked by inserting them. U+2028 (soft line break) and U+FFFC (object anchor)
+# stay inside a paragraph. Other stored control characters (e.g. U+000E) are
+# left inline, which has not been checked.
+_PARAGRAPH_BREAKS = re.compile("[\n\r\x0b\x0c\x04\x05\u2029]")
+
+
+def split_paragraphs(body: str) -> list[str]:
+    """Split body text into paragraphs the way Pages numbers them."""
+    return _PARAGRAPH_BREAKS.split(body)
+
+
 def read_text(path: str) -> dict:
     """Read the text of a .pages file without opening Pages.
 
     Returns ``{"body": str, "other": [{"kind": int | None, "text": str}]}``.
-    ``body`` keeps paragraph breaks as line feeds, exactly as stored. ``other``
+    ``body`` is the text exactly as stored; use split_paragraphs for Pages'
+    paragraph numbering (a line feed is not the only paragraph break). ``other``
     lists non-empty text from other storages (text boxes, shapes, headers,
     footnotes); ``kind`` is Pages' storage kind, or None when absent (text
     boxes and shapes). Pages also stores some in-text objects and breaks as

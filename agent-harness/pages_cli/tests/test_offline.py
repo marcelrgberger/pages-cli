@@ -218,3 +218,23 @@ class TestReadFileCommand:
     def test_error_is_reported(self, tmp_path):
         result = CliRunner().invoke(cli, ["document", "read-file", str(tmp_path / "x.pages")])
         assert "File not found" in result.output
+
+
+class TestParagraphSplitting:
+    def test_pages_paragraph_breaks_split_and_are_dropped(self):
+        body = "a\nb\x04c\x05d\re\x0cf\x0bg\u2029h"
+        assert offline.split_paragraphs(body) == list("abcdefgh")
+
+    def test_soft_break_and_object_anchor_stay_inline(self):
+        assert offline.split_paragraphs("a\u2028b\ufffcc") == ["a\u2028b\ufffcc"]
+
+    def test_empty_paragraphs_are_kept(self):
+        assert offline.split_paragraphs("a\n\n\x05b") == ["a", "", "", "b"]
+
+    def test_read_file_numbers_paragraphs_like_pages(self, tmp_path):
+        path = tmp_path / "ctrl.pages"
+        zipped(path, {"Index/Document.iwa": iwa(archive((2001, storage("one\x05two\nthree", 0))))})
+        result = CliRunner().invoke(cli, ["--json", "document", "read-file", str(path)])
+        data = json.loads(result.output)
+        assert data["paragraphs"] == ["one", "two", "three"]
+        assert data["body"] == "one\x05two\nthree"

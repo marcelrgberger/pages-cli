@@ -69,7 +69,9 @@ pages-cli document close --no-save
 ```bash
 pages-cli text add "New text"
 pages-cli text set "Replace entire body text"   # resets paragraph styles; prefer the targeted edits below
-# Targeted edits keep each paragraph's style. They change the open document and do not save.
+# Targeted edits keep each paragraph's style. They edit the open document; pages-cli does not save,
+# but Pages autosaves a saved document in place within ~30 s and closing without saving does not undo it,
+# so work on a copy or keep a backup.
 pages-cli --json text find "phrase" --ignore-case
 pages-cli text replace "old" "new" --paragraph 3 --occurrence 1
 pages-cli text replace-word 3 2 "new"

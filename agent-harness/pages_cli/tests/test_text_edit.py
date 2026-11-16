@@ -114,16 +114,18 @@ class TestApplyOps:
         assert T._apply_ops(["abc", "def"], ops) == ["a-", "-c", "Zef"]
 
 
-class TestSpanScript:
+class TestSpanSteps:
     def test_deletes_trailing_characters_last_to_first_then_sets_first(self):
-        script = T._span_script_lines(2, 5, 8, 'say "hi"')
-        lines = script.splitlines()
-        assert [l.split()[2] for l in lines] == ["8", "7", "6", "5"]
-        assert all(l.endswith('to ""') for l in lines[:-1])
-        assert lines[-1].endswith('to "say \\"hi\\""')
+        steps = T._span_steps(2, 5, 8, 'say "hi"')
+        assert steps == [(2, 8, ""), (2, 7, ""), (2, 6, ""), (2, 5, 'say "hi"')]
 
     def test_single_character_has_no_deletions(self):
-        assert len(T._span_script_lines(1, 3, 3, "x").splitlines()) == 1
+        assert T._span_steps(1, 3, 3, "x") == [(1, 3, "x")]
+
+    def test_script_escapes_text_and_targets_one_document(self):
+        script = T._steps_script([(2, 5, 'say "hi"')], 'document "Draft"')
+        assert 'set d to document "Draft"' in script
+        assert 'set character 5 of paragraph 2 of body text of d to "say \\"hi\\""' in script
 
 
 class TestEditSpans:
@@ -140,7 +142,7 @@ class TestEditSpans:
     def test_unexpected_result_is_reported_not_swallowed(self):
         fake = FakePages(["abc"], after=["garbled"])
         with patch("pages_cli.core.text._run_applescript", fake):
-            with pytest.raises(RuntimeError, match="paragraph 1.*close it without saving"):
+            with pytest.raises(RuntimeError, match="paragraph 1.*backup copy"):
                 T._edit_spans(["abc"], [(1, 1, 3, "X")], None)
 
     @pytest.mark.parametrize("op", [(2, 1, 1, "x"), (1, 0, 2, "x"), (1, 3, 2, "x"), (1, 1, 9, "x")])
@@ -150,6 +152,36 @@ class TestEditSpans:
             with pytest.raises(ValueError):
                 T._edit_spans(["abc"], [op], None)
         assert fake.edit_scripts == []
+
+    def test_large_edit_is_sent_in_batches_last_to_first(self):
+        fake = FakePages(["aaaa", "bbbb"], after=["Z", "Y"])
+        with patch("pages_cli.core.text._run_applescript", fake), \
+             patch.object(T, "_MAX_STEPS_PER_SCRIPT", 3):
+            T._edit_spans(["aaaa", "bbbb"], [(1, 1, 4, "Z"), (2, 1, 4, "Y")], None)
+        assert len(fake.edit_scripts) == 3
+        order = [int(m) for script in fake.edit_scripts
+                 for m in __import__("re").findall(r"of paragraph (\d) of body", script)]
+        assert order == [2, 2, 2, 2, 1, 1, 1, 1]
+        assert all(script.count("set character") <= 3 for script in fake.edit_scripts)
+
+    def test_batch_failure_reports_partial_edit_and_the_backup(self):
+        calls = []
+
+        def flaky(script):
+            if "character id" in script:
+                return listing("aaaa", "bbbb")
+            calls.append(script)
+            if len(calls) == 2:
+                raise RuntimeError("AppleScript timed out after 30 seconds.")
+            return ""
+
+        with patch("pages_cli.core.text._run_applescript", flaky), \
+             patch.object(T, "_MAX_STEPS_PER_SCRIPT", 3):
+            with pytest.raises(RuntimeError) as err:
+                T._edit_spans(["aaaa", "bbbb"], [(1, 1, 4, "Z"), (2, 1, 4, "Y")], None)
+        message = str(err.value)
+        assert "part-way: 3 of 8" in message
+        assert "backup copy" in message and "timed out" in message
 
     def test_carriage_return_rejected(self):
         with pytest.raises(ValueError):
